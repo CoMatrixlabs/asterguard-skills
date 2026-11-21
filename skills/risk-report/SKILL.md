@@ -37,8 +37,14 @@ renders — no server round-trip to display.
      (features on free, +ars on enterprise), `SCA` = the package roll-up or null. It draws the risk
      features, the information-flow (proven path), the security graph, and the crosswalk from that JSON.
    - `templates/attack-path.html` (the focused single-path view) for just the attack path.
-   Both lay out *any* enrich output (layers by path distance, color by kind, proven path red). Add more
-   views (BOM, exec scorecard, control coverage) the same way: feed a template the standardized JSON.
+   - `templates/engagement-console.html` (**the offensive/pentest view**): replace its two consts with
+     the engagement roll-up + the red-team **run records** (`ENGAGEMENT` = `./.asterguard/engagement.json`,
+     `RUNS` = `./.asterguard/runs/*.json`; schema in `behavioral-redteam/references/run-record.md`). It
+     draws the risk cards, the lethal-trifecta kill-chain, and one transcript panel per run (attacker/agent
+     turns, canary highlighted, per-turn verdicts for a multi-turn crescendo) with out-of-band evidence,
+     verdict, ASR@budget, weakness and control chips. This is the view `pentest-report` renders.
+   Both graph templates lay out *any* enrich output (layers by path distance, color by kind, proven path
+   red). Add more views (BOM, exec scorecard, control coverage) the same way: feed a template the JSON.
 4. Numbers only from the data; the picture is computed from the schema, never drawn by hand.
 
 ## Practical Guidance
@@ -65,5 +71,7 @@ HTML stays the human view, SARIF the machine view — one finding set, two rende
 - [Visual grammar (shared across views)](./references/visual-grammar.md)
 - [Composite report renderer — inject graph.enrich/controls.map/risk.score JSON](./templates/report.html)
 - [Attack-path renderer template (data-driven)](./templates/attack-path.html)
+- [Engagement console (offensive) — inject engagement.json + runs/*.json](./templates/engagement-console.html)
+- [Offensive run-record schema (the console's input)](../behavioral-redteam/references/run-record.md)
 - [Graph schema (SSOT)](../../docs/graph-schema.md)
 - [AsterVault MCP tools](../weakness-graph/references/astervault-tools.md)

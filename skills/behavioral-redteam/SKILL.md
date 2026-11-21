@@ -43,8 +43,11 @@ recall ─► attacker(context) ─turn─► defender ─response─► judge �
   overstate robustness.
 - **Independent verdicts** — the judge decides from canary/egress/audit, never the target's or attacker's word.
 - **Never weaken the target** to force a break; a break must be a real bypass.
-- Write specs to `./.asterguard/tests.behavioral.json`, transcripts to `./.asterguard/runs/`, each
-  stamped with the `attacker_model`.
+- Write specs to `./.asterguard/tests.behavioral.json` and one **run record** per episode to
+  `./.asterguard/runs/<id>.json` — the normalized, evidence-first artifact `pentest-report` /
+  `risk-report` consume (full verbatim turns + responses, canary, out-of-band evidence, verdict,
+  ASR@budget, weakness→controls, ARS). Schema + rules: [`references/run-record.md`](./references/run-record.md).
+  Stamp `attacker_model` + `mode` (offline/connected) on every record.
 
 ## Integration
 

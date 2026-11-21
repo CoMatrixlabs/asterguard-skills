@@ -1,0 +1,166 @@
+<!doctype html>
+<!--
+  engagement-console.html — the pentest/engagement console view (data-driven).
+
+  Companion to report.html (graph/attack-surface) and attack-path.html (single path). This one renders
+  an authorized engagement the way the product console shows it: risk cards, the lethal-trifecta kill
+  chain (shared visual grammar), and one transcript panel per red-team run with its out-of-band
+  evidence, verdict, ASR@budget, weakness, and control chips.
+
+  USE: replace the two consts below with the raw artifacts —
+    ENGAGEMENT = ./.asterguard/engagement.json
+    RUNS       = [ ./.asterguard/runs/<id>.json, ... ]   (see behavioral-redteam/references/run-record.md)
+  Everything is computed from that JSON; nothing is hand-placed. No network. Honest offline labeling:
+  where evidence.audit_id is null the panel says so instead of implying gateway proof.
+-->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AsterGuard — Offensive Engagement Report</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{margin:0;background:#0a0d14;color:#c9d4e3;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 20px 60px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid #1c2230;padding-bottom:16px}
+.brand{font-weight:800;letter-spacing:.5px;font-size:19px}.brand span{color:#ff4d4f}
+.sub{color:#8795a8;font-size:12.5px;margin-top:3px}
+.modepill{background:#2a2410;border:1px solid #6b5a1e;color:#e4c762;padding:3px 10px;border-radius:999px;font-size:11.5px}
+.offline{background:#1a1407;border:1px solid #6b5a1e;color:#e4c762;border-radius:10px;padding:11px 14px;margin:16px 0;font-size:12.6px}
+.offline b{color:#ffd872}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+.card{background:#11151f;border:1px solid #1c2230;border-radius:12px;padding:16px}
+.cbig{font-size:30px;font-weight:800}.cbig.small{font-size:16px;padding-top:8px}
+.clab{color:#8795a8;font-size:11.5px;margin-top:4px;text-transform:uppercase;letter-spacing:.4px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#8795a8;margin:30px 0 10px;border-bottom:1px solid #1c2230;padding-bottom:7px}
+.kcwrap{background:#0d111a;border:1px solid #1c2230;border-radius:12px;padding:10px}.kc{width:100%;height:auto}
+.kc .nl{fill:#dfe8f3;font:600 11.5px sans-serif}.kc .ns{fill:#9fb0c6;font:10px sans-serif}
+.kc .el{fill:#8795a8;font:10px sans-serif}.kc .proven{fill:#ff8f90;font:600 10.5px sans-serif}
+.panel{background:#11151f;border:1px solid #1c2230;border-radius:12px;margin:14px 0;overflow:hidden}
+.phead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid #1c2230;background:#0e1219}
+.pathbadge{background:#1c2230;color:#9fb0c6;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;margin-right:8px}
+.ptitle{font-weight:700;font-size:14.5px}.pbadges{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.verdict{padding:3px 9px;border-radius:5px;font-size:11px;font-weight:800}
+.verdict.broke{background:#3a1416;color:#ff6b6d;border:1px solid #ff4d4f}
+.verdict.held{background:#10243a;color:#6db0ff;border:1px solid #4b8fd6}
+.verdict.inconclusive{background:#241f10;color:#e4c762;border:1px solid #6b5a1e}
+.pill{color:#120a0a;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:800}
+.ars{color:#c9d4e3;font-weight:700;font-size:12px}.asr{color:#9fb0c6;font-size:11.5px;font-family:ui-monospace,monospace}
+.pmeta{display:flex;gap:16px;flex-wrap:wrap;padding:9px 16px;border-bottom:1px solid #1c2230;font-size:12px;color:#9fb0c6}
+.pmeta b{color:#c9d4e3;font-weight:600;margin-right:4px}.modetag{margin-left:auto;color:#e4c762;font-size:11px}
+.pbody{display:grid;grid-template-columns:1.25fr 1fr;gap:0}
+.col{padding:14px 16px}.transcript{border-right:1px solid #1c2230;min-width:0}
+.bub{border-radius:9px;padding:9px 11px;margin:8px 0;font-size:12.6px;white-space:pre-wrap;word-break:break-word}
+.bub b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;opacity:.7}
+.bub.atk{background:#14101a;border:1px solid #3a2a4a}.bub.def{background:#0d1622;border:1px solid #1d3147}
+.turn{border-left:2px solid #2a3350;padding-left:10px;margin:10px 0}
+.tnum{font-size:11px;color:#9fb0c6;font-weight:700;margin-bottom:2px}
+.tv{margin-left:7px;padding:1px 6px;border-radius:4px;font-size:9.5px}
+.tv.broke{background:#3a1416;color:#ff6b6d}.tv.held{background:#10243a;color:#6db0ff}
+.wire{font-family:ui-monospace,monospace;font-size:11px;color:#ff9a9b;margin-top:5px;word-break:break-all}.wire.muted{color:#5a6377}
+.canary{background:#3a1416;color:#ff8f90;padding:0 3px;border-radius:3px;font-weight:700}
+.side{background:#0d111a}.sblock{margin-bottom:13px}
+.sblock h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#8795a8}
+.kv{display:flex;gap:8px;font-size:12px;margin:2px 0}.kv span{color:#8795a8;min-width:74px;flex:none}
+.evrow{margin:5px 0}.evk{display:block;color:#8795a8;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px}
+.evrow code{display:block;background:#080b11;border:1px solid #1c2230;border-radius:6px;padding:7px 8px;font-size:11px;white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.muted{color:#5a6377}.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-size:10.5px;padding:2px 7px;border-radius:5px;font-family:ui-monospace,monospace}
+.chip.fail{background:#2a1214;border:1px solid #5e2327;color:#ff9a9b}
+.caveat ul{margin:4px 0 0;padding-left:16px;font-size:11.8px;color:#e4c762}.caveat h4{color:#c9a84a}
+.foot{color:#5a6377;font-size:11px;margin-top:26px;border-top:1px solid #1c2230;padding-top:12px}
+@media(max-width:860px){.cards{grid-template-columns:repeat(2,1fr)}.pbody{grid-template-columns:1fr}.transcript{border-right:none;border-bottom:1px solid #1c2230}}
+</style></head>
+<body><div class="wrap" id="root"></div>
+<script>
+// ─── replace these two consts with the raw artifacts (engagement.json + the runs/*.json array) ───
+const ENGAGEMENT = /*__ENGAGEMENT__*/ {
+  engagement:"Sample engagement", target:"<target>", authorization:"authorized self-test",
+  mode:"offline (vault CanaryRegistry in-process)", attacker_model:{model:"<model>"},
+  canary_verifier:"astervault.security.canary.CanaryRegistry",
+  offline_disclosure:"Offline: no gateway audit_id / egress-detection / PDP evidence; detection+resolution run locally.",
+  runs:["sample"]
+};
+const RUNS = /*__RUNS__*/ [{
+  id:"sample", test_name:"Sample — replace RUNS with ./.asterguard/runs/*.json", path:"A",
+  skill:"attacker ▸ defender ▸ judge", strategy:"direct injection",
+  attacker_model:{provider:"harness",model:"<model>"}, mode:"offline (vault in-process)",
+  attack_turns:["<attacker turn>"], defender_responses:["<agent response>"],
+  canary:{token_id:"cn_0",type:"secret",planted_location:"<where>"},
+  evidence:{ran:true,channel:"export wire",egress_body:"<captured egress>",
+            verify:{fired:true,findings:[{encoding:"raw",source:"scan",boundary:"data",severity:"critical"}]},audit_id:null,
+            audit_note:"no gateway audit in offline mode"},
+  verdict:"broke", asr:{budget:1,value:1,first_break_turn:1},
+  weakness:{weakness_id:"llm_cfg_egress_no_dlp",name:"Effectful egress tool with no content DLP",category:"data_exfiltration",owasp_llm_refs:["LLM06","LLM02"],cwe_refs:["CWE-200"]},
+  controls:[{framework:"soc2",id:"CC6.1"},{framework:"gdpr",id:"Art-32"},{framework:"pci-dss",id:"3.4"}],
+  ars:{ars:9.0,band:"critical"}, caveats:["sample record"]
+}];
+
+const BAND={critical:"#ff4d4f",high:"#ff9a3d",medium:"#d4d14a",low:"#3ecf8e"};
+const CANARY=/((?:sk|mem|ctx|doc)-canary-[A-Za-z0-9]+-[0-9a-f]+|900-\d\d-[A-Z0-9]+|AKIACANARY\w+|spiffe:\/\/canary\.local\/\S+)/g;
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hl=s=>esc(s).replace(CANARY,m=>`<span class="canary">${m}</span>`);
+const pill=b=>`<span class="pill" style="background:${BAND[b]||"#888"}">${esc(b).toUpperCase()}</span>`;
+
+function chips(cs){const seen=new Set(),out=[];(cs||[]).forEach(c=>{const k=`${c.framework}:${c.id}`;if(seen.has(k))return;seen.add(k);out.push(`<span class="chip fail" title="${esc(c.text||"")}">${esc(k)}</span>`);});return out.slice(0,14).join("");}
+function transcript(r){
+  const t=(r.evidence||{}).turns;
+  if(t)return t.map(x=>`<div class="turn"><div class="tnum">T${x.turn}<span class="tv ${x.verdict}">${x.verdict.toUpperCase()}</span></div>`+
+    `<div class="bub atk"><b>attacker</b>${hl(x.attack)}</div><div class="bub def"><b>agent</b>${hl(x.response)}</div>`+
+    (x.export_wire?`<div class="wire"><b>export wire ▸</b> ${hl(x.export_wire)}</div>`:`<div class="wire muted">export wire ▸ (nothing exported)</div>`)+`</div>`).join("");
+  return (r.attack_turns||[]).map((a,i)=>`<div class="bub atk"><b>attacker</b>${hl(a)}</div><div class="bub def"><b>agent</b>${hl((r.defender_responses||[])[i]||"")}</div>`).join("");
+}
+function evidence(r){const ev=r.evidence||{},b=[];
+  if(ev.egress_body)b.push(`<div class="evrow"><span class="evk">egress (partner POST)</span><code>${hl(ev.egress_body)}</code></div>`);
+  if(ev.agent_output){b.push(`<div class="evrow"><span class="evk">returned dump</span><code>${hl(ev.agent_output)}</code></div>`);if(ev.cross_tenant_rows)b.push(`<div class="evrow"><span class="evk">cross-tenant rows</span><code>${esc(ev.cross_tenant_rows.join(", "))}</code></div>`);}
+  if(ev.recall_text)b.push(`<div class="evrow"><span class="evk">cross-tenant recall</span><code>${hl([].concat(ev.recall_text).join("\n"))}</code></div>`);
+  const f=((ev.verify||{}).findings||[{}])[0];
+  b.push(`<div class="evrow"><span class="evk">vault canary.verify</span><code>fired=${esc((ev.verify||{}).fired)} · encoding=${esc(f.encoding)} · source=${esc(f.source)} · boundary=${esc(f.boundary)} · severity=${esc(f.severity)}</code></div>`);
+  b.push(`<div class="evrow"><span class="evk">gateway audit_id</span><code class="muted">${esc(ev.audit_id!=null?ev.audit_id:(ev.audit_note||"no gateway audit (offline mode)"))}</code></div>`);
+  return b.join("");
+}
+function panel(r){const w=r.weakness||{},ars=r.ars||{},band=ars.band||"high",a=r.asr||{};
+  const asr=`ASR@${a.budget} = ${(a.value!=null?a.value:0)}`+((a.first_break_turn&&a.budget>1)?` · first break T${a.first_break_turn}`:"");
+  const cav=(r.caveats||[]).map(c=>`<li>${esc(c)}</li>`).join("");
+  return `<section class="panel"><div class="phead">
+    <div><span class="pathbadge">PATH ${esc(r.path)}</span><span class="ptitle">${esc(r.test_name)}</span></div>
+    <div class="pbadges"><span class="verdict ${r.verdict}">${esc(r.verdict).toUpperCase()}</span>${pill(band)}<span class="ars">ARS ${esc(ars.ars??"—")}</span><span class="asr">${esc(asr)}</span></div></div>
+    <div class="pmeta"><span><b>skill</b>${esc(r.skill)}</span><span><b>strategy</b>${esc(r.strategy)}</span>
+      <span><b>attacker</b>${esc((r.attacker_model||{}).provider||"")}:${esc((r.attacker_model||{}).model||"")}</span><span class="modetag">${esc(r.mode)}</span></div>
+    <div class="pbody"><div class="col transcript">${transcript(r)}</div><div class="col side">
+      <div class="sblock"><h4>Canary</h4><div class="kv"><span>type</span>${esc(r.canary.type)}</div><div class="kv"><span>planted</span>${esc(r.canary.planted_location)}</div><div class="kv"><span>token</span>${esc(r.canary.token_id)}</div></div>
+      <div class="sblock"><h4>Out-of-band evidence</h4>${evidence(r)}</div>
+      <div class="sblock"><h4>Weakness</h4><div class="kv"><span>id</span>${esc(w.weakness_id)}</div><div class="kv"><span>name</span>${esc(w.name)}</div><div class="kv"><span>OWASP-LLM</span>${esc((w.owasp_llm_refs||[]).join(" "))}</div><div class="kv"><span>CWE</span>${esc((w.cwe_refs||[]).join(" "))}</div></div>
+      <div class="sblock"><h4>Controls violated</h4><div class="chips">${chips(r.controls)}</div></div>
+      ${cav?`<div class="sblock caveat"><h4>Caveats (honest)</h4><ul>${cav}</ul></div>`:""}
+    </div></div></section>`;
+}
+function killchain(){const N=(x,y,l,s,f,st,i)=>`<g transform="translate(${x},${y})"><rect x="-66" y="-24" width="132" height="48" rx="8" fill="${f}" stroke="${st}" stroke-width="1.6"/><text x="0" y="-4" text-anchor="middle" class="nl">${i} ${l}</text><text x="0" y="13" text-anchor="middle" class="ns">${s}</text></g>`;
+  const E=(x1,y1,x2,y2,l,on=true)=>{const c=on?"#ff4d4f":"#49506a",d=on?"":'stroke-dasharray="5 4"';return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="1.8" ${d} marker-end="url(#ah)"/><text x="${(x1+x2)/2}" y="${(y1+y2)/2-5}" text-anchor="middle" class="el">${l}</text>`;};
+  const R="#3a1416",B="#10243a",RS="#ff4d4f",BS="#4b8fd6";
+  return `<svg viewBox="0 0 900 300" class="kc" xmlns="http://www.w3.org/2000/svg"><defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#ff4d4f"/></marker></defs>`+
+    E(156,70,254,120,"instructs")+E(156,190,254,140,"reads")+E(386,120,494,65,"can call")+E(386,135,494,150,"can call")+E(386,145,494,240,"writes")+E(626,150,734,150,"sends to")+
+    N(90,70,"untrusted turn","“partner” / SQLi",R,RS,"◆")+N(90,190,"data record","PII + canary",R,RS,"◆")+N(320,130,"agent","under test",B,BS,"▣")+
+    N(560,60,"read tool","cross-tenant",B,BS,"✉")+N(560,150,"egress tool","ungated POST",B,BS,"✉")+N(560,240,"memory","unscoped",B,BS,"✉")+N(800,150,"external sink","egress",R,RS,"◆")+
+    `<g transform="translate(800,40)"><rect x="-70" y="-16" width="150" height="26" rx="13" fill="#3a1416" stroke="#ff4d4f"/><text x="5" y="2" text-anchor="middle" class="proven">● proven · canary on wire</text></g></svg>`;
+}
+(function(){
+  const proven=RUNS.filter(r=>r.verdict==="broke").length;
+  const maxArs=Math.max(0,...RUNS.map(r=>(r.ars||{}).ars||0));
+  const band=(RUNS.find(r=>((r.ars||{}).ars)===maxArs)||{}).ars?.band||"critical";
+  const paths=[...new Set(RUNS.map(r=>r.path))].sort();
+  const em=ENGAGEMENT.attacker_model||{};
+  document.getElementById("root").innerHTML=`
+    <div class="top"><div><div class="brand">ASTER<span>GUARD</span> · offensive engagement</div>
+      <div class="sub">${esc(ENGAGEMENT.engagement)}<br>target: <b>${esc(ENGAGEMENT.target)}</b></div></div>
+      <div class="modepill">${esc(ENGAGEMENT.mode)}</div></div>
+    <div class="offline"><b>Offline mode — honest disclosure.</b> ${esc(ENGAGEMENT.offline_disclosure||"")}</div>
+    <div class="cards">
+      <div class="card"><div class="cbig" style="color:${BAND[band]}">${maxArs}</div><div class="clab">ARS · ${esc(band).toUpperCase()}</div></div>
+      <div class="card"><div class="cbig">${proven}/${RUNS.length}</div><div class="clab">proven breaks</div></div>
+      <div class="card"><div class="cbig">${paths.length}</div><div class="clab">trifecta paths (${esc(paths.join(" · "))})</div></div>
+      <div class="card"><div class="cbig small">${esc(em.model||"—")}</div><div class="clab">attacker model</div></div></div>
+    <h2>Attack surface · kill chain (lethal trifecta)</h2><div class="kcwrap">${killchain()}</div>
+    <h2>Findings — ${proven} proven breaks (PoC + out-of-band evidence each)</h2>${RUNS.map(panel).join("")}
+    <div class="foot">Independent verifier: ${esc(ENGAGEMENT.canary_verifier||"")}. Authorization: ${esc(ENGAGEMENT.authorization||"")}.
+      A finding is “broke” only with out-of-band evidence; offline mode carries no gateway audit_id.</div>`;
+})();
+</script></body></html>
